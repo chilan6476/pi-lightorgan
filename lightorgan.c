@@ -251,9 +251,9 @@ int main()
 {
 
     //Start as a daemon
-//    if( daemon(0,0) != 0) {
-//      exit(1);
-//    }
+    if( daemon(0,0) != 0) {
+      exit(1);
+    }
     
     //Setup wiringPi
     if( wiringPiSetup() == -1) {
