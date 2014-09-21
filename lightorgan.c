@@ -7,32 +7,30 @@ static snd_seq_t *seq_handle;
 static int in_port;
 
 ////////////////////////////////////////////////////////////////////////////
-// Output pin Setup options
-///////////////////////////////////////////////////////////////////////////////
-//If you don't want to play PERCUSSION, BASE, or SYNTH instruments, keep set these values to -1
-//Otherwise, set these values to the ZERO INDEXED pin that you want to use to control those
-//instruments.
+//Example setup: There are 12 melody channels. Each index is mapped to 
+// the corresponding Wiring Pi valued channel in the array below.
 //
-//
-//int PERCUSSION_PIN_IDX = -1;
-//int BASE_PIN_IDX = -1;
-//int SYNTH_PIN_IDX = -1;
-
-
-//Example setup: There are 5 melody channels,
-// the BASE and SYNTH instruments play on pin 6, 
-// the PERCUSSION instruments play on pin 5, 
-#define NUM_MELODY_PINS 5
-int PERCUSSION_PIN_IDX = 5;
-int BASE_PIN_IDX = 6;
-int SYNTH_PIN_IDX = 6;
 //////////////////////////////////////////////////////////////////
 
+int pinMapping[] = {
+0, //0
+1, //1
+2, //2
+3, //3
+4, //4
+5, //5
+6, //6
+7, //7
+8, //8
+9, //9
+10,//10
+11 //11
+};
 
+#define TOTAL_PINS sizeof(pinMapping) / sizeof(int)
 #define THRUPORTCLIENT 14
 #define THRUPORTPORT 0
 
-#define TOTAL_PINS NUM_MELODY_PINS + 3
 void midi_open(void)
 {
     snd_seq_open(&seq_handle, "default", SND_SEQ_OPEN_INPUT, 0);
@@ -75,6 +73,12 @@ void clearPinNotes() {
    }
 }
 
+void myDigitalWrite(int pinIdx, int val) {
+     val  ?  printf("%i (%i) ON\n", pinIdx, pinMapping[pinIdx])  : printf("%i (%i) OFF\n", pinIdx, pinMapping[pinIdx]);
+     digitalWrite( pinMapping[pinIdx], val );
+}
+
+
 void clearPinChannels() {
    int i;
    for(i=0; i< TOTAL_PINS; i++) {
@@ -89,15 +93,15 @@ void clearPinsState() {
 
 void pinsOn() {
    int i;
-   for(i=0; i< TOTAL_PINS; i++) {
-      digitalWrite(i, 1); 
+   for(i=0; i< TOTAL_PINS; i++) { 
+      myDigitalWrite(i, 1); 
    }
 }
 
 void pinsOff() {
    int i;
    for(i=0; i< TOTAL_PINS; i++) {
-      digitalWrite(i, 1); 
+      myDigitalWrite(i, 1); 
    }
 }
 
@@ -128,38 +132,9 @@ int isSynth(int instrVal) {
 
 
 int choosePinIdx(int note, int channel) {
-   int instr = playChannels[channel];
-   if( isPercussion(instr) && PERCUSSION_PIN_IDX != -1 ) {
-     //printf("Playing percussion channel\n");
-     return PERCUSSION_PIN_IDX;
-   }
-   else if( isBase(instr) && BASE_PIN_IDX != -1) {
-     //printf("Playing base channel\n");
-     return BASE_PIN_IDX;
-   }
-   else if( isSynth(instr) && SYNTH_PIN_IDX != -1) {
-
-     //printf("Playing synth channel\n");
-     return SYNTH_PIN_IDX;
-   }
-   else { //Is a melody type instrument
-     //There are 12 different kinds of notes.
-     int noteMod = note % 12;
- 
-     //Cast to double
-     double noteModDouble = noteMod;
-
-     //The pin to use is determined by:
-     // ( pitch  /  ( Total number of notes / Total Number of Pins) )
-     double noteBin = noteModDouble / (12.0 / NUM_MELODY_PINS);
-
-     //Cast back to int
-     int pinIdx = (int)noteBin;
-     return pinIdx;
-   }
-
-      
-
+   //Return the note modulated by the number of melody pins
+   int val = note  % (TOTAL_PINS * 2);
+   return val / 2;
 }
 
 
@@ -202,7 +177,7 @@ void midi_process(snd_seq_event_t *ev)
                  }
                  //Write to the pin, save the note to pinNotes
                  //printf("Pin %i - %s %i %i \n", pinIdx, isOn ? "on" : "off", ev->data.note.note, ev->data.note.channel);       
-                 digitalWrite(pinIdx, 1); 
+                 myDigitalWrite(pinIdx, 1); 
                  pinNotes[pinIdx] = ev->data.note.note;
                  pinChannels[pinIdx] =  ev->data.note.channel;
               }
@@ -214,26 +189,11 @@ void midi_process(snd_seq_event_t *ev)
               if( pinNotes[pinIdx] == ev->data.note.note && pinChannels[pinIdx] == ev->data.note.channel ) {
                  //Write to the pin, indicate that pin is available
                  //printf("Pin %i - %s %i %i \n", pinIdx, isOn ? "on" : "off", ev->data.note.note, ev->data.note.channel);       
-                 digitalWrite(pinIdx, 0); 
+                 myDigitalWrite(pinIdx, 0); 
                  pinNotes[pinIdx] = -1;
                  pinChannels[pinIdx] = INT_MAX;
               }
            }
-       }
-       else {
-          //This is the percussion channel, flip the value
-          static int percussionOn = 0;
-          if( PERCUSSION_PIN_IDX != -1 ) {
-             if( percussionOn) {
-               digitalWrite(pinIdx, 0); 
-               percussionOn = 0;
-             }
-             else {
-               digitalWrite(pinIdx, 1);
-               percussionOn = 1;
-             }
-          }
-          
        }
 
     }
@@ -250,11 +210,6 @@ void midi_process(snd_seq_event_t *ev)
 int main()
 {
 
-    //Start as a daemon
-    if( daemon(0,0) != 0) {
-      exit(1);
-    }
-    
     //Setup wiringPi
     if( wiringPiSetup() == -1) {
       exit(1);
@@ -263,7 +218,7 @@ int main()
     //Setup all the pins to use OUTPUT mode
     int i=0;
     for(i=0; i< TOTAL_PINS; i++) {
-      pinMode(i, OUTPUT);
+      pinMode( pinMapping[i], OUTPUT);
     }
 
 
